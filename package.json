@@ -1,0 +1,30 @@
+{
+  "name": "airtable",
+  "version": "1.0.1",
+  "description": "Airtable Extension for Cognigy.AI to query and retrieve records from Airtable bases",
+  "main": "build/module.js",
+  "scripts": {
+    "transpile": "tsc -p .",
+    "zip": "tar cfz $npm_package_name-$npm_package_version.tar.gz build/* package.json package-lock.json README.md icon.png",
+    "build": "npm run transpile && npm run lint && npm run zip",
+    "lint": "tslint -c tslint.json src/**/*.ts"
+  },
+  "keywords": [
+    "Cognigy.AI",
+    "airtable",
+    "extensions",
+    "database",
+    "api"
+  ],
+  "author": "Cognigy Community",
+  "license": "MIT",
+  "dependencies": {
+    "@cognigy/extension-tools": "^0.16.1",
+    "axios": "^1.7.7"
+  },
+  "devDependencies": {
+    "@types/node": "^13.13.15",
+    "tslint": "^6.1.3",
+    "typescript": "^4.8.4"
+  }
+}
