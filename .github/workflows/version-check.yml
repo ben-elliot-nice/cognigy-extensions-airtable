@@ -45,7 +45,7 @@ jobs:
             echo "✅ Version bumped from ${{ steps.develop_version.outputs.version }} to ${{ steps.pr_version.outputs.version }}"
           fi
 
-  lint:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -60,5 +60,5 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run lint
-        run: npm run lint
+      - name: Run build
+        run: npm run build
