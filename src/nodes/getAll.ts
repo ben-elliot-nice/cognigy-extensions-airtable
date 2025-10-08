@@ -194,6 +194,10 @@ export const getAllNode = createNodeDescriptor({
 			contextKey
 		} = config as IGetAllParams["config"];
 
+		// Log incoming parameters
+		api.log("debug", `[Airtable Get All] cognigy param: ${JSON.stringify(cognigy)}`);
+		api.log("debug", `[Airtable Get All] config param: ${JSON.stringify(config)}`);
+
 		try {
 			const params: any = {
 				maxRecords
