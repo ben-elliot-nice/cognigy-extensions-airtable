@@ -8,7 +8,9 @@ export interface IUpsertRecordParams extends INodeFunctionBaseParams {
 		};
 		baseId: string;
 		tableName: string;
-		recordId: string;
+		searchField: string;
+		searchValue: string;
+		createIfNotFound: boolean;
 		fields: any;
 		storeLocation: string;
 		inputKey: string;
@@ -46,25 +48,41 @@ export const upsertRecordNode = createNodeDescriptor({
 			key: "tableName",
 			label: "Table Name",
 			type: "cognigyText",
-			description: "The name of the table to update",
+			description: "The name of the table to upsert into",
 			params: {
 				required: true
 			}
 		},
 		{
-			key: "recordId",
-			label: "Record ID",
+			key: "searchField",
+			label: "Search Field",
 			type: "cognigyText",
-			description: "The Airtable record ID to update (e.g., rec123abc)",
+			description: "The field name to search by (e.g., Email, ID, Name)",
 			params: {
 				required: true
 			}
+		},
+		{
+			key: "searchValue",
+			label: "Search Value",
+			type: "cognigyText",
+			description: "The value to search for",
+			params: {
+				required: true
+			}
+		},
+		{
+			key: "createIfNotFound",
+			label: "Create if Not Found",
+			type: "toggle",
+			description: "If enabled, creates a new record when not found. If disabled, returns Not Found error.",
+			defaultValue: true
 		},
 		{
 			key: "fields",
-			label: "Fields to Update",
+			label: "Fields to Update/Insert",
 			type: "json",
-			description: "JSON object containing field names and values to update",
+			description: "JSON object containing field names and values to update or insert",
 			params: {
 				required: true
 			}
@@ -125,7 +143,9 @@ export const upsertRecordNode = createNodeDescriptor({
 		{ type: "field", key: "connection" },
 		{ type: "field", key: "baseId" },
 		{ type: "field", key: "tableName" },
-		{ type: "field", key: "recordId" },
+		{ type: "field", key: "searchField" },
+		{ type: "field", key: "searchValue" },
+		{ type: "field", key: "createIfNotFound" },
 		{ type: "field", key: "fields" },
 		{ type: "section", key: "storageOption" }
 	],
@@ -133,7 +153,7 @@ export const upsertRecordNode = createNodeDescriptor({
 		color: "#ffb100"
 	},
 	dependencies: {
-		children: ["success", "notFound", "error"]
+		children: ["upsertSuccess", "upsertNotFound", "upsertError"]
 	},
 	function: async ({ cognigy, config, childConfigs }: INodeFunctionBaseParams) => {
 		const { api } = cognigy;
@@ -141,7 +161,9 @@ export const upsertRecordNode = createNodeDescriptor({
 			connection,
 			baseId,
 			tableName,
-			recordId,
+			searchField,
+			searchValue,
+			createIfNotFound,
 			fields,
 			storeLocation,
 			inputKey,
@@ -149,57 +171,132 @@ export const upsertRecordNode = createNodeDescriptor({
 		} = config as IUpsertRecordParams["config"];
 
 		try {
-			const response = await axios.patch(
-				`https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableName)}/${recordId}`,
-				{
-					fields
-				},
+			// Step 1: Search for the record
+			const searchParams = {
+				filterByFormula: `{${searchField}} = "${searchValue}"`
+			};
+
+			const searchResponse = await axios.get(
+				`https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableName)}`,
 				{
 					headers: {
 						Authorization: `Bearer ${connection.accessToken}`,
 						"Content-Type": "application/json"
-					}
+					},
+					params: searchParams
 				}
 			);
 
-			const result = {
-				success: true,
-				record: response.data
-			};
+			const records = searchResponse.data.records;
 
-			if (storeLocation === "context") {
-				api.addToContext(contextKey, result, "simple");
-			} else {
-				// @ts-ignore
-				api.addToInput(inputKey, result);
-			}
+			// Step 2: Determine action based on search results
+			if (records.length === 0) {
+				// Record not found
+				if (createIfNotFound) {
+					// Create new record
+					const createResponse = await axios.post(
+						`https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableName)}`,
+						{
+							fields
+						},
+						{
+							headers: {
+								Authorization: `Bearer ${connection.accessToken}`,
+								"Content-Type": "application/json"
+							}
+						}
+					);
 
-			const successChild = childConfigs.find(child => child.type === "success");
-			if (successChild) api.setNextNode(successChild.id);
+					const result = {
+						success: true,
+						created: true,
+						record: createResponse.data
+					};
 
-		} catch (error: any) {
-			// Check if it's a 404 (record not found)
-			if (error.response?.status === 404) {
-				const notFoundResult = {
-					success: false,
-					notFound: true,
-					message: `Record not found: ${recordId}`,
-					recordId
+					if (storeLocation === "context") {
+						api.addToContext(contextKey, result, "simple");
+					} else {
+						// @ts-ignore
+						api.addToInput(inputKey, result);
+					}
+
+					const successChild = childConfigs.find(child => child.type === "upsertSuccess");
+					if (successChild) api.setNextNode(successChild.id);
+				} else {
+					// createIfNotFound is false, return not found
+					const notFoundResult = {
+						success: false,
+						notFound: true,
+						message: `Record not found with ${searchField} = "${searchValue}"`,
+						searchField,
+						searchValue
+					};
+
+					if (storeLocation === "context") {
+						api.addToContext(contextKey, notFoundResult, "simple");
+					} else {
+						// @ts-ignore
+						api.addToInput(inputKey, notFoundResult);
+					}
+
+					const notFoundChild = childConfigs.find(child => child.type === "upsertNotFound");
+					if (notFoundChild) api.setNextNode(notFoundChild.id);
+				}
+			} else if (records.length === 1) {
+				// Record found - update it
+				const recordId = records[0].id;
+
+				const updateResponse = await axios.patch(
+					`https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableName)}/${recordId}`,
+					{
+						fields
+					},
+					{
+						headers: {
+							Authorization: `Bearer ${connection.accessToken}`,
+							"Content-Type": "application/json"
+						}
+					}
+				);
+
+				const result = {
+					success: true,
+					updated: true,
+					record: updateResponse.data
 				};
 
 				if (storeLocation === "context") {
-					api.addToContext(contextKey, notFoundResult, "simple");
+					api.addToContext(contextKey, result, "simple");
 				} else {
 					// @ts-ignore
-					api.addToInput(inputKey, notFoundResult);
+					api.addToInput(inputKey, result);
 				}
 
-				const notFoundChild = childConfigs.find(child => child.type === "notFound");
-				if (notFoundChild) api.setNextNode(notFoundChild.id);
-				return;
+				const successChild = childConfigs.find(child => child.type === "upsertSuccess");
+				if (successChild) api.setNextNode(successChild.id);
+			} else {
+				// Multiple records found
+				const errorResult = {
+					success: false,
+					error: true,
+					message: `Multiple records found (${records.length}) with ${searchField} = "${searchValue}". Cannot upsert.`,
+					count: records.length,
+					searchField,
+					searchValue
+				};
+
+				if (storeLocation === "context") {
+					api.addToContext(contextKey, errorResult, "simple");
+				} else {
+					// @ts-ignore
+					api.addToInput(inputKey, errorResult);
+				}
+
+				const errorChild = childConfigs.find(child => child.type === "upsertError");
+				if (errorChild) api.setNextNode(errorChild.id);
 			}
 
-			// Other errors
+		} catch (error: any) {
 			const errorMessage = error.response?.data?.error?.message || error.message || "Unknown error occurred";
 			const errorResult = {
 				success: false,
@@ -216,7 +313,7 @@ export const upsertRecordNode = createNodeDescriptor({
 				api.addToInput(inputKey, errorResult);
 			}
 
-			const errorChild = childConfigs.find(child => child.type === "error");
+			const errorChild = childConfigs.find(child => child.type === "upsertError");
 			if (errorChild) api.setNextNode(errorChild.id);
 		}
 	}
@@ -224,7 +321,7 @@ export const upsertRecordNode = createNodeDescriptor({
 
 // Child node definitions
 export const upsertSuccessNode = createNodeDescriptor({
-	type: "success",
+	type: "upsertSuccess",
 	parentType: "airtable-upsert-record",
 	defaultLabel: "Success",
 	appearance: {
@@ -247,7 +344,7 @@ export const upsertSuccessNode = createNodeDescriptor({
 });
 
 export const upsertNotFoundNode = createNodeDescriptor({
-	type: "notFound",
+	type: "upsertNotFound",
 	parentType: "airtable-upsert-record",
 	defaultLabel: "Not Found",
 	appearance: {
@@ -270,7 +367,7 @@ export const upsertNotFoundNode = createNodeDescriptor({
 });
 
 export const upsertErrorNode = createNodeDescriptor({
-	type: "error",
+	type: "upsertError",
 	parentType: "airtable-upsert-record",
 	defaultLabel: "Error",
 	appearance: {
