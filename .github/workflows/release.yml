@@ -167,7 +167,11 @@ jobs:
 
           # Convert to matrix format
           MATRIX=$(echo "$DEPLOYMENTS" | jq -s '.')
-          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+          {
+            echo "matrix<<EOF"
+            echo "$MATRIX"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
           echo "count=$(echo "$MATRIX" | jq 'length')" >> $GITHUB_OUTPUT
 
           echo "🎯 Found $(echo "$MATRIX" | jq 'length') deployment(s) for release type: $RELEASE_TYPE"
