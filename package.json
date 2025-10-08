@@ -1,6 +1,6 @@
 {
   "name": "airtable",
-  "version": "1.0.8",
+  "version": "1.1.0",
   "description": "Airtable Extension for Cognigy.AI to query and retrieve records from Airtable bases",
   "main": "build/module.js",
   "scripts": {

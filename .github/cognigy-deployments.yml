@@ -18,3 +18,9 @@ deployments:
     projectId: "68cc9c59ae744c215e32ef67"
     releaseTypes: ["major", "minor", "patch"]
     enabled: true
+
+  - name: "SN - Master Bot"
+    environment: "CSA_INT"
+    projectId: "68e5b35dd3fd946530d80988"
+    releaseTypes: ["major", "minor", "patch"]
+    enabled: true
