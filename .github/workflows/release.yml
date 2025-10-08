@@ -223,17 +223,44 @@ jobs:
               continue
             fi
 
-            # Make API request
+            # Check if extension exists
+            echo "🔍 Checking if extension exists..."
+            CHECK_RESPONSE=$(curl -s -w "\n%{http_code}" -X GET \
+              "${API_URL}/v2.0/extensions?projectId=${PROJECT_ID}&filter=${PACKAGE_NAME}" \
+              -H "X-API-Key: ${API_KEY}" \
+              -H "Accept: application/json")
+
+            CHECK_HTTP_CODE=$(echo "$CHECK_RESPONSE" | tail -n1)
+            CHECK_BODY=$(echo "$CHECK_RESPONSE" | head -n -1)
+
+            if [[ "$CHECK_HTTP_CODE" != "200" ]]; then
+              echo "❌ Failed to check extension existence (HTTP $CHECK_HTTP_CODE)"
+              echo "Response: $CHECK_BODY"
+              FAILED_DEPLOYMENTS+=("$NAME: Check failed HTTP $CHECK_HTTP_CODE")
+              [[ "$FAIL_FAST" == "true" ]] && exit 1
+              continue
+            fi
+
+            # Determine if extension exists
+            EXTENSION_COUNT=$(echo "$CHECK_BODY" | jq '.items | length')
+
+            if [[ "$EXTENSION_COUNT" -gt 0 ]]; then
+              echo "📝 Extension exists - updating..."
+              ENDPOINT="${API_URL}/v2.0/extensions/update"
+              PAYLOAD="{\"projectId\":\"${PROJECT_ID}\",\"url\":\"${RELEASE_URL}\",\"extension\":\"${PACKAGE_NAME}\"}"
+            else
+              echo "📦 Extension does not exist - uploading..."
+              ENDPOINT="${API_URL}/v2.0/extensions/upload"
+              PAYLOAD="{\"projectId\":\"${PROJECT_ID}\",\"url\":\"${RELEASE_URL}\",\"name\":\"${PACKAGE_NAME}\"}"
+            fi
+
+            # Make deployment API request
             RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
-              "${API_URL}/v2.0/extensions" \
+              "${ENDPOINT}" \
               -H "X-API-Key: ${API_KEY}" \
               -H "Content-Type: application/json" \
               -H "Accept: application/json" \
-              -d "{
-                \"projectId\": \"${PROJECT_ID}\",
-                \"url\": \"${RELEASE_URL}\",
-                \"name\": \"${PACKAGE_NAME}\"
-              }")
+              -d "${PAYLOAD}")
 
             HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
             BODY=$(echo "$RESPONSE" | head -n -1)
