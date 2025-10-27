@@ -194,6 +194,20 @@ export const getAllNode = createNodeDescriptor({
 			contextKey
 		} = config as IGetAllParams["config"];
 
+		// Start logging
+		api.log("info", `Get All Records - Base: ${baseId}, Table: ${tableName}, Max: ${maxRecords}`);
+
+		if (filterByFormula) {
+			api.log("debug", `Filter: ${filterByFormula}`);
+		}
+
+		if (fields && fields.length > 0) {
+			api.log("debug", `Retrieving specific fields: ${fields.join(", ")}`);
+		}
+
+		if (sortField) {
+			api.log("debug", `Sort: ${sortField} (${sortDirection})`);
+		}
 
 		try {
 			const params: any = {
@@ -229,6 +243,8 @@ export const getAllNode = createNodeDescriptor({
 				total: response.data.records.length
 			};
 
+			api.log("info", `Retrieved ${response.data.records.length} records from table ${tableName}`);
+
 			if (storeLocation === "context") {
 				api.addToContext(contextKey, result, "simple");
 			} else {
@@ -237,6 +253,8 @@ export const getAllNode = createNodeDescriptor({
 			}
 
 		} catch (error: any) {
+			api.log("error", `Error retrieving records - Status: ${error.response?.status || "N/A"}, Message: ${error.response?.data?.error?.message || error.message}`);
+
 			const errorMessage = error.response?.data?.error?.message || error.message || "Unknown error occurred";
 			const errorResult = {
 				error: true,

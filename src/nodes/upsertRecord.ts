@@ -170,6 +170,9 @@ export const upsertRecordNode = createNodeDescriptor({
 			contextKey
 		} = config as IUpsertRecordParams["config"];
 
+		// Start logging
+		api.log("info", `Upsert Record - Base: ${baseId}, Table: ${tableName}, Search: {${searchField}} = "${searchValue}", Create if not found: ${createIfNotFound}`);
+
 		try {
 			// Step 1: Search for the record
 			const searchParams = {
@@ -189,11 +192,14 @@ export const upsertRecordNode = createNodeDescriptor({
 
 			const records = searchResponse.data.records;
 
+			api.log("debug", `Found ${records.length} matching records`);
+
 			// Step 2: Determine action based on search results
 			if (records.length === 0) {
 				// Record not found
 				if (createIfNotFound) {
 					// Create new record
+					api.log("info", "Creating new record");
 					const createResponse = await axios.post(
 						`https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableName)}`,
 						{
@@ -213,6 +219,8 @@ export const upsertRecordNode = createNodeDescriptor({
 						record: createResponse.data
 					};
 
+					api.log("info", `Record created - ID: ${createResponse.data.id}`);
+
 					if (storeLocation === "context") {
 						api.addToContext(contextKey, result, "simple");
 					} else {
@@ -224,6 +232,7 @@ export const upsertRecordNode = createNodeDescriptor({
 					if (successChild) api.setNextNode(successChild.id);
 				} else {
 					// createIfNotFound is false, return not found
+					api.log("info", "Record not found and createIfNotFound is false");
 					const notFoundResult = {
 						success: false,
 						notFound: true,
@@ -246,6 +255,8 @@ export const upsertRecordNode = createNodeDescriptor({
 				// Record found - update it
 				const recordId = records[0].id;
 
+				api.log("info", `Updating existing record - ID: ${recordId}`);
+
 				const updateResponse = await axios.patch(
 					`https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableName)}/${recordId}`,
 					{
@@ -265,6 +276,8 @@ export const upsertRecordNode = createNodeDescriptor({
 					record: updateResponse.data
 				};
 
+				api.log("info", `Record updated - ID: ${updateResponse.data.id}`);
+
 				if (storeLocation === "context") {
 					api.addToContext(contextKey, result, "simple");
 				} else {
@@ -276,6 +289,7 @@ export const upsertRecordNode = createNodeDescriptor({
 				if (successChild) api.setNextNode(successChild.id);
 			} else {
 				// Multiple records found
+				api.log("error", `Error: Multiple records found (${records.length}), cannot upsert`);
 				const errorResult = {
 					success: false,
 					error: true,
@@ -297,6 +311,8 @@ export const upsertRecordNode = createNodeDescriptor({
 			}
 
 		} catch (error: any) {
+			api.log("error", `Error during upsert - Status: ${error.response?.status || "N/A"}, Message: ${error.response?.data?.error?.message || error.message}`);
+
 			const errorMessage = error.response?.data?.error?.message || error.message || "Unknown error occurred";
 			const errorResult = {
 				success: false,
