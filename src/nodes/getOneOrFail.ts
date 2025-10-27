@@ -166,6 +166,9 @@ export const getOneOrFailNode = createNodeDescriptor({
 			contextKey
 		} = config as IGetOneOrFailParams["config"];
 
+		// Start logging
+		api.log("info", `Get One Record - Base: ${baseId}, Table: ${tableName}, Search: {${searchField}} = "${searchValue}"`);
+
 		try {
 			const params: any = {
 				filterByFormula: `{${searchField}} = "${searchValue}"`
@@ -188,8 +191,12 @@ export const getOneOrFailNode = createNodeDescriptor({
 
 			const records = response.data.records;
 
+			api.log("debug", `Found ${records.length} matching records`);
+
 			if (records.length === 0) {
 				// No records found - go to notFound path
+				api.log("info", "Routing to: notFound");
+
 				const result = {
 					found: false,
 					message: `No record found with ${searchField} = "${searchValue}"`
@@ -208,6 +215,8 @@ export const getOneOrFailNode = createNodeDescriptor({
 
 			} else if (records.length > 1) {
 				// Multiple records found - go to multipleFound path
+				api.log("info", `Routing to: multipleFound (${records.length} records)`);
+
 				const result = {
 					found: true,
 					multiple: true,
@@ -229,6 +238,8 @@ export const getOneOrFailNode = createNodeDescriptor({
 
 			} else {
 				// Exactly one record found - success path
+				api.log("info", `Routing to: success (Record ID: ${records[0].id})`);
+
 				const result = {
 					found: true,
 					multiple: false,
@@ -248,6 +259,9 @@ export const getOneOrFailNode = createNodeDescriptor({
 			}
 
 		} catch (error: any) {
+			api.log("error", `Error searching records - Status: ${error.response?.status || "N/A"}, Message: ${error.response?.data?.error?.message || error.message}`);
+			api.log("info", "Routing to: error");
+
 			const errorMessage = error.response?.data?.error?.message || error.message || "Unknown error occurred";
 			const errorResult = {
 				error: true,

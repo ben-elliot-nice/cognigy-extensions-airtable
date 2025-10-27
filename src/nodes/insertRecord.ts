@@ -133,6 +133,12 @@ export const insertRecordNode = createNodeDescriptor({
 			contextKey
 		} = config as IInsertRecordParams["config"];
 
+		// Start logging
+		api.log("info", `Insert Record - Base: ${baseId}, Table: ${tableName}`);
+
+		const fieldCount = recordFields ? Object.keys(recordFields).length : 0;
+		api.log("debug", `Inserting record with ${fieldCount} fields`);
+
 		try {
 			const response = await axios.post(
 				`https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableName)}`,
@@ -154,6 +160,8 @@ export const insertRecordNode = createNodeDescriptor({
 				createdTime: response.data.createdTime
 			};
 
+			api.log("info", `Record created - ID: ${response.data.id}`);
+
 			if (storeLocation === "context") {
 				api.addToContext(contextKey, result, "simple");
 			} else {
@@ -162,6 +170,8 @@ export const insertRecordNode = createNodeDescriptor({
 			}
 
 		} catch (error: any) {
+			api.log("error", `Error inserting record - Status: ${error.response?.status || "N/A"}, Message: ${error.response?.data?.error?.message || error.message}`);
+
 			const errorMessage = error.response?.data?.error?.message || error.message || "Unknown error occurred";
 			const errorResult = {
 				success: false,
