@@ -5,6 +5,7 @@ import { getAllNode } from "./nodes/getAll";
 import { getOneOrFailNode, successNode, notFoundNode, multipleFoundNode, errorNode } from "./nodes/getOneOrFail";
 import { insertRecordNode } from "./nodes/insertRecord";
 import { upsertRecordNode, upsertSuccessNode, upsertNotFoundNode, upsertErrorNode } from "./nodes/upsertRecord";
+import { getTableSchemaNode } from "./nodes/getTableSchema";
 
 /* import all connections */
 import { airtableConnection } from "./connections/airtableConnection";
@@ -15,6 +16,7 @@ export default createExtension({
 		getOneOrFailNode,
 		insertRecordNode,
 		upsertRecordNode,
+		getTableSchemaNode,
 		successNode,
 		notFoundNode,
 		multipleFoundNode,
