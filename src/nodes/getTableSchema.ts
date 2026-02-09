@@ -7,7 +7,7 @@ export interface IGetTableSchemaParams extends INodeFunctionBaseParams {
 			accessToken: string;
 		};
 		baseId: string;
-		tableName: string;
+		tableId: string;
 		storeLocation: string;
 		inputKey: string;
 		contextKey: string;
@@ -41,11 +41,13 @@ export const getTableSchemaNode = createNodeDescriptor({
 			}
 		},
 		{
-			key: "tableName",
-			label: "Table Name (Optional)",
+			key: "tableId",
+			label: "Table ID",
 			type: "cognigyText",
-			description: "Specific table name to filter by (leave empty to get all tables)",
-			defaultValue: ""
+			description: "The Airtable table ID (e.g., tbl...)",
+			params: {
+				required: true
+			}
 		},
 		{
 			key: "storeLocation",
@@ -102,7 +104,7 @@ export const getTableSchemaNode = createNodeDescriptor({
 	form: [
 		{ type: "field", key: "connection" },
 		{ type: "field", key: "baseId" },
-		{ type: "field", key: "tableName" },
+		{ type: "field", key: "tableId" },
 		{ type: "section", key: "storageOption" }
 	],
 	appearance: {
@@ -113,14 +115,14 @@ export const getTableSchemaNode = createNodeDescriptor({
 		const {
 			connection,
 			baseId,
-			tableName,
+			tableId,
 			storeLocation,
 			inputKey,
 			contextKey
 		} = config as IGetTableSchemaParams["config"];
 
 		// Start logging
-		api.log("info", `Get Table Schema - Base: ${baseId}${tableName ? `, Table: ${tableName}` : " (all tables)"}`);
+		api.log("info", `Get Table Schema - Base: ${baseId}, Table ID: ${tableId}`);
 
 		try {
 			const response = await axios.get(
@@ -133,37 +135,48 @@ export const getTableSchemaNode = createNodeDescriptor({
 				}
 			);
 
-			let tables = response.data.tables;
+			// Filter by table ID
+			const tables = response.data.tables.filter((t: any) => t.id === tableId);
 
-			// Filter by table name if specified
-			if (tableName) {
-				tables = tables.filter((t: any) => t.name === tableName);
-				api.log("debug", `Filtered to ${tables.length} table(s) matching "${tableName}"`);
+			if (tables.length === 0) {
+				api.log("error", `Table with ID "${tableId}" not found in base ${baseId}`);
+				const notFoundResult = {
+					error: true,
+					message: `Table with ID "${tableId}" not found`,
+					status: 404
+				};
+
+				if (storeLocation === "context") {
+					api.addToContext(contextKey, notFoundResult, "simple");
+				} else {
+					// @ts-ignore
+					api.addToInput(inputKey, notFoundResult);
+				}
+				return;
 			}
 
-			api.log("info", `Retrieved schema for ${tables.length} table(s)`);
+			api.log("info", `Retrieved schema for table "${tables[0].name}" with ${tables[0].fields?.length || 0} fields`);
 
 			// Build result with useful information
 			const result = {
-				tables: tables.map((table: any) => ({
-					id: table.id,
-					name: table.name,
-					description: table.description || null,
-					fieldCount: table.fields?.length || 0,
-					fields: table.fields?.map((field: any) => ({
+				table: {
+					id: tables[0].id,
+					name: tables[0].name,
+					description: tables[0].description || null,
+					fieldCount: tables[0].fields?.length || 0,
+					fields: tables[0].fields?.map((field: any) => ({
 						id: field.id,
 						name: field.name,
 						type: field.type,
 						description: field.description || null,
 						options: field.options || null
 					})) || []
-				})),
-				total: tables.length
+				}
 			};
 
-			// Log field counts for each table
-			tables.forEach((table: any) => {
-				api.log("debug", `Table "${table.name}": ${table.fields?.length || 0} fields`);
+			// Log field details
+			tables[0].fields?.forEach((field: any) => {
+				api.log("debug", `  - ${field.name} (${field.type})`);
 			});
 
 			if (storeLocation === "context") {
